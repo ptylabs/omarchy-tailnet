@@ -15,26 +15,42 @@ Panel {
 
   property int rowIndex: 0
   property bool cursorActive: false
+  property bool helpOpen: false
+  property bool popupOpen: false
 
   readonly property color foreground: bar ? bar.foreground : Commons.Color.foreground
   readonly property color urgent: bar ? bar.urgent : Commons.Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
+  readonly property color subtleFill: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.07)
+  readonly property color hotFill: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.16)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color barIconColor: tailnet.active ? barForeground : Qt.darker(barForeground, 1.55)
   // This machine is row 0 so the keyboard cursor walks one flat list.
   readonly property var rows: tailnet.active && tailnet.selfDevice ? [tailnet.selfDevice].concat(tailnet.visibleDevices) : []
-  readonly property string heroMeta: {
-    if (!tailnet.installed) return "Tailscale no está instalado"
-    if (!tailnet.active) return tailnet.statusText
-    var parts = []
-    if (tailnet.magicDnsSuffix !== "") parts.push(tailnet.magicDnsSuffix)
-    parts.push(tailnet.onlineCount + "/" + tailnet.devices.length + " en línea")
-    return parts.join(" · ")
-  }
+  readonly property var shortcuts: [
+    { key: "↵", text: "SSH" },
+    { key: "f", text: "Subir / descargar" },
+    { key: "u", text: "Subir archivos" },
+    { key: "b", text: "Descargar archivos" },
+    { key: "y", text: "Copiar…" },
+    { key: "c", text: "Copiar IP" },
+    { key: "d", text: "Copiar alias" },
+    { key: "o", text: "Abrir servicio web" },
+    { key: "r", text: "Actualizar y escanear" },
+    { key: "t", text: "Tailscale on/off" },
+    { key: "?", text: "Ayuda" },
+    { key: "clic der.", text: "Icono: on/off" },
+    { key: "clic central", text: "Icono: escanear" }
+  ]
 
   function selectedRow() {
     if (rows.length === 0) return null
     return rows[Math.max(0, Math.min(rowIndex, rows.length - 1))]
+  }
+
+  function selectedRowItem() {
+    if (!deviceColumn || rowIndex < 0 || rowIndex >= deviceColumn.children.length) return null
+    return deviceColumn.children[rowIndex]
   }
 
   function ensureCursor() {
@@ -53,8 +69,8 @@ Panel {
   }
 
   function scrollCursorIntoView() {
-    if (!panelFlick || !deviceColumn || rowIndex < 0 || rowIndex >= deviceColumn.children.length) return
-    var item = deviceColumn.children[rowIndex]
+    var item = selectedRowItem()
+    if (!panelFlick || !item) return
     Qt.callLater(function() {
       if (!item) return
       var margin = Style.space(6)
@@ -64,6 +80,11 @@ Panel {
       if (top < panelFlick.contentY + margin) panelFlick.contentY = Math.max(0, top - margin)
       else if (bottom > panelFlick.contentY + panelFlick.height - margin) panelFlick.contentY = Math.min(maxY, bottom + margin - panelFlick.height)
     })
+  }
+
+  function rescan() {
+    tailnet.refresh()
+    tailnet.scan()
   }
 
   function sshTo(device) {
@@ -78,11 +99,23 @@ Panel {
     close()
   }
 
+  function copyValue(device, kind) {
+    if (!device) return
+    if (kind === "ip") tailnet.copyToClipboard(device.ip, device.name + " IP")
+    else tailnet.copyToClipboard(device.dnsName, device.name + " alias")
+  }
+
+  function popupClosed() {
+    popupOpen = false
+    if (opened) Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  }
+
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
   onOpenedChanged: if (opened) {
     cursorActive = false
+    helpOpen = false
     if (panelFlick) panelFlick.contentY = 0
     tailnet.refresh()
     tailnet.scanIfStale()
@@ -100,7 +133,7 @@ Panel {
     function open(): void { root.open() }
     function close(): void { root.close() }
     function toggle(): void { root.toggle() }
-    function refresh(): string { tailnet.refresh(); tailnet.scan(); return "ok" }
+    function refresh(): string { root.rescan(); return "ok" }
     function status(): string { return tailnet.statusText }
   }
 
@@ -122,7 +155,7 @@ Panel {
     }
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton) tailnet.toggleTailscale()
-      else if (buttonCode === Qt.MiddleButton) { tailnet.refresh(); tailnet.scan() }
+      else if (buttonCode === Qt.MiddleButton) root.rescan()
       else root.toggle()
     }
   }
@@ -134,28 +167,37 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(420))
+    contentWidth: panel.fittedContentWidth(Style.space(380))
     contentHeight: panel.fittedContentHeight(column.implicitHeight, Style.space(620))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.popupOpen
       onMoveRequested: function(dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }
         if (dy !== 0) root.moveCursor(dy)
       }
       onActivateRequested: if (root.cursorActive) root.sshTo(root.selectedRow())
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (root.helpOpen) root.helpOpen = false
+        else root.close()
+      }
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         var device = root.selectedRow()
-        if (t === "t" || t === "T") tailnet.toggleTailscale()
-        else if (t === "r" || t === "R") { tailnet.refresh(); tailnet.scan() }
-        else if (t === "c" || t === "C") { if (device) tailnet.copyToClipboard(device.ip, device.name + " IP") }
-        else if (t === "d" || t === "D") { if (device) tailnet.copyToClipboard(device.dnsName, device.name + " DNS") }
-        else if (t === "o" || t === "O") tailnet.openFirstWebService(device)
-        else if (t === "u" || t === "U") root.transferTo(device, "upload")
-        else if (t === "b" || t === "B") root.transferTo(device, "download")
+        var item = root.selectedRowItem()
+        var key = String(t).toLowerCase()
+        if (t === "?") root.helpOpen = !root.helpOpen
+        else if (key === "t") tailnet.toggleTailscale()
+        else if (key === "r") root.rescan()
+        else if (key === "c") root.copyValue(device, "ip")
+        else if (key === "d") root.copyValue(device, "alias")
+        else if (key === "y") { if (item && item.openCopy) item.openCopy() }
+        else if (key === "f") { if (item && item.openTransfer) item.openTransfer() }
+        else if (key === "o") tailnet.openFirstWebService(device)
+        else if (key === "u") root.transferTo(device, "upload")
+        else if (key === "b") root.transferTo(device, "download")
       }
 
       Flickable {
@@ -174,36 +216,81 @@ Panel {
           width: panelFlick.width
           spacing: Style.space(12)
 
-          PanelHero {
-            id: hero
+          Item {
+            id: header
             width: parent.width
-            title: tailnet.tailnetName !== "" ? tailnet.tailnetName : "Tailnet"
-            meta: root.heroMeta
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-            iconOpacity: tailnet.active ? 1.0 : 0.5
-            iconComponent: Component {
-              TailscaleIcon {
-                iconSize: Style.font.display
-                color: tailnet.active ? root.foreground : root.dim
-                badgeColor: root.urgent
-                crossed: !tailnet.active && !tailnet.needsLogin
-                warning: tailnet.needsLogin
-              }
-            }
-            trailingControl: Component {
-              ToggleSwitch {
-                id: powerSwitch
-                visible: tailnet.installed
-                checked: tailnet.active
-                busy: tailnet.busy
-                foreground: root.foreground
-                onToggled: tailnet.toggleTailscale()
+            implicitHeight: hero.implicitHeight
+            // The hero's trailingControl resolves `root` to PanelHero, so the
+            // controls reach panel state through `header`.
+            readonly property bool helpOpen: root.helpOpen
+            function toggleHelp() { root.helpOpen = !root.helpOpen }
+            function rescan() { root.rescan() }
 
-                PanelToolTip {
-                  visible: powerSwitch.containsMouse
-                  text: tailnet.active ? "Desactivar Tailscale" : (tailnet.needsLogin ? "Autorizar este equipo" : "Activar Tailscale")
-                  fontFamily: root.fontFamily
+            PanelHero {
+              id: hero
+              width: parent.width
+              title: tailnet.tailnetName !== "" ? tailnet.tailnetName : "Tailnet"
+              meta: tailnet.active ? "" : (tailnet.installed ? tailnet.statusText : "Tailscale no está instalado")
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              iconOpacity: tailnet.active ? 1.0 : 0.5
+              iconComponent: Component {
+                TailscaleIcon {
+                  iconSize: Style.font.display
+                  color: tailnet.active ? hero.foreground : Qt.darker(hero.foreground, 1.55)
+                  badgeColor: Commons.Color.urgent
+                  crossed: !tailnet.active && !tailnet.needsLogin
+                  warning: tailnet.needsLogin
+                }
+              }
+              trailingControl: Component {
+                Row {
+                  spacing: Style.space(6)
+
+                  PanelActionButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: tailnet.active
+                    iconText: "󰑐"
+                    tooltipText: "Actualizar y escanear"
+                    foreground: hero.foreground
+                    fontFamily: hero.fontFamily
+                    enabled: !tailnet.scanning
+                    onClicked: header.rescan()
+
+                    RotationAnimation on rotation {
+                      running: tailnet.scanning
+                      from: 0
+                      to: 360
+                      duration: 900
+                      loops: Animation.Infinite
+                      onStopped: parent.rotation = 0
+                    }
+                  }
+
+                  PanelActionButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    iconText: header.helpOpen ? "󰅖" : "󰋖"
+                    tooltipText: header.helpOpen ? "Cerrar ayuda" : "Atajos (?)"
+                    foreground: hero.foreground
+                    fontFamily: hero.fontFamily
+                    onClicked: header.toggleHelp()
+                  }
+
+                  ToggleSwitch {
+                    id: powerSwitch
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: tailnet.installed
+                    checked: tailnet.active
+                    busy: tailnet.busy
+                    foreground: hero.foreground
+                    onToggled: tailnet.toggleTailscale()
+
+                    PanelToolTip {
+                      visible: powerSwitch.containsMouse
+                      text: tailnet.active ? "Desactivar Tailscale" : (tailnet.needsLogin ? "Autorizar este equipo" : "Activar Tailscale")
+                      fontFamily: hero.fontFamily
+                    }
+                  }
                 }
               }
             }
@@ -220,81 +307,82 @@ Panel {
             wrapMode: Text.WordWrap
           }
 
-          PanelSeparator {
-            visible: root.rows.length > 0
-            foreground: root.foreground
-          }
-
-          Column {
-            visible: root.rows.length > 0
+          GridLayout {
+            visible: root.helpOpen
             width: parent.width
-            spacing: Style.space(10)
+            columns: 2
+            columnSpacing: Style.space(10)
+            rowSpacing: Style.space(6)
 
-            RowLayout {
-              width: parent.width
-
-              PanelSectionHeader {
+            Repeater {
+              model: root.helpOpen ? root.shortcuts : []
+              delegate: Item {
+                required property var modelData
                 Layout.fillWidth: true
-                text: "DISPOSITIVOS"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-              }
+                implicitHeight: shortcutRow.implicitHeight
 
-              Text {
-                textFormat: Text.PlainText
-                text: tailnet.scanning ? "escaneando servicios…" : ""
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.caption
-              }
+                Row {
+                  id: shortcutRow
+                  spacing: Style.space(8)
 
-              PanelActionButton {
-                iconText: "󰑐"
-                tooltipText: "Actualizar y escanear (r)"
-                foreground: root.foreground
-                fontFamily: root.fontFamily
-                enabled: !tailnet.scanning
-                onClicked: { tailnet.refresh(); tailnet.scan() }
-              }
-            }
+                  Rectangle {
+                    width: Math.max(Style.space(22), keyText.implicitWidth + Style.space(10))
+                    height: keyText.implicitHeight + Style.space(4)
+                    radius: Style.cornerRadius
+                    color: root.subtleFill
+                    anchors.verticalCenter: parent.verticalCenter
 
-            Column {
-              id: deviceColumn
-              width: parent.width
-              spacing: Style.space(6)
+                    Text {
+                      id: keyText
+                      anchors.centerIn: parent
+                      textFormat: Text.PlainText
+                      text: modelData.key
+                      color: root.foreground
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+                  }
 
-              Repeater {
-                model: root.rows
-                DeviceRow {
-                  required property var modelData
-                  required property int index
-                  width: deviceColumn.width
-                  device: modelData
-                  rowIndex: index
+                  Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: modelData.text
+                    color: root.dim
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.font.caption
+                  }
                 }
               }
             }
           }
 
-          Text {
-            visible: tailnet.active && tailnet.devices.length === 0
+          Column {
+            id: deviceColumn
+            visible: !root.helpOpen && root.rows.length > 0
             width: parent.width
-            text: "No hay otros dispositivos en este tailnet."
+            spacing: Style.space(4)
+
+            Repeater {
+              model: root.rows
+              DeviceRow {
+                required property var modelData
+                required property int index
+                width: deviceColumn.width
+                device: modelData
+                rowIndex: index
+              }
+            }
+          }
+
+          Text {
+            visible: !root.helpOpen && tailnet.active && tailnet.devices.length === 0
+            width: parent.width
+            text: "Sin otros dispositivos"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             horizontalAlignment: Text.AlignHCenter
-          }
-
-          Text {
-            visible: tailnet.active
-            width: parent.width
-            text: "↵ ssh · u subir · b bajar · c copiar IP · d copiar DNS · o abrir web · r escanear · t on/off"
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
           }
         }
       }
@@ -306,36 +394,45 @@ Panel {
     property var device: null
     property int rowIndex: 0
     readonly property bool online: device && device.online === true
+    readonly property bool isSelf: device && device.self === true
+    readonly property bool remoteOnline: online && !isSelf
     readonly property var services: tailnet.servicesFor(device)
-    readonly property string subtitle: {
-      if (!device) return ""
-      var parts = []
-      if (device.self) parts.push("este equipo")
-      if (device.ip !== "") parts.push(device.ip)
-      if (device.dnsName !== "") parts.push(device.dnsName)
-      if (!online) {
-        var seen = tailnet.relativeTime(device.lastSeen)
-        parts.push(seen !== "" ? "visto " + seen : "offline")
-      }
-      return parts.join(" · ")
-    }
-    readonly property string servicesHint: {
-      if (!online) return ""
-      if (!tailnet.hasScanned(device)) return tailnet.scanning ? "escaneando…" : "sin escanear"
-      return services.length === 0 ? "sin servicios detectados" : ""
+    readonly property string hoverText: {
+      if (!device || online) return ""
+      var seen = tailnet.relativeTime(device.lastSeen)
+      return seen !== "" ? "Desconectado · visto " + seen : "Desconectado"
     }
 
+    function openCopy() { copyPopup.open() }
+    function closePopups() {
+      copyPopup.close()
+      transferPopup.close()
+    }
+
+    Connections {
+      target: root
+      function onOpenedChanged() { if (!root.opened) deviceRow.closePopups() }
+    }
+
+    function openTransfer() { if (remoteOnline) transferPopup.open() }
+
     hasCursor: root.cursorActive && root.rowIndex === rowIndex
-    current: device && device.self === true
     foreground: root.foreground
-    opacity: online ? 1.0 : 0.55
+    opacity: online ? 1.0 : 0.5
     implicitHeight: content.implicitHeight + Style.spacing.rowPaddingX
 
     MouseArea {
+      id: rowMouse
       anchors.fill: parent
       hoverEnabled: true
       onContainsMouseChanged: if (containsMouse) root.setRowCursor(deviceRow.rowIndex)
       onDoubleClicked: root.sshTo(deviceRow.device)
+    }
+
+    PanelToolTip {
+      visible: deviceRow.hoverText !== "" && rowMouse.containsMouse
+      text: deviceRow.hoverText
+      fontFamily: root.fontFamily
     }
 
     RowLayout {
@@ -343,13 +440,12 @@ Panel {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
-      anchors.leftMargin: Style.space(10)
-      anchors.rightMargin: Style.space(8)
+      anchors.leftMargin: Style.space(8)
+      anchors.rightMargin: Style.space(6)
       spacing: Style.space(8)
 
       Item {
         Layout.alignment: Qt.AlignTop
-        Layout.topMargin: Style.space(2)
         implicitWidth: Style.space(22)
         implicitHeight: osGlyph.implicitHeight
 
@@ -370,7 +466,6 @@ Panel {
           radius: width / 2
           anchors.right: osGlyph.right
           anchors.bottom: osGlyph.bottom
-          anchors.rightMargin: -Style.space(2)
           color: deviceRow.online ? "#4ade80" : root.dim
           border.color: Commons.Color.background
           border.width: 1
@@ -379,7 +474,8 @@ Panel {
 
       ColumnLayout {
         Layout.fillWidth: true
-        spacing: Style.space(2)
+        Layout.alignment: Qt.AlignVCenter
+        spacing: Style.space(4)
 
         Text {
           textFormat: Text.PlainText
@@ -388,24 +484,13 @@ Panel {
           color: root.foreground
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
-          font.bold: deviceRow.device && deviceRow.device.self === true
-          elide: Text.ElideRight
-        }
-
-        Text {
-          textFormat: Text.PlainText
-          Layout.fillWidth: true
-          text: deviceRow.subtitle
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
+          font.bold: deviceRow.isSelf
           elide: Text.ElideRight
         }
 
         Flow {
           Layout.fillWidth: true
-          Layout.topMargin: Style.space(2)
-          visible: deviceRow.services.length > 0 || deviceRow.servicesHint !== ""
+          visible: deviceRow.services.length > 0
           spacing: Style.space(4)
 
           Repeater {
@@ -416,60 +501,255 @@ Panel {
               device: deviceRow.device
             }
           }
-
-          Text {
-            visible: deviceRow.servicesHint !== ""
-            textFormat: Text.PlainText
-            text: deviceRow.servicesHint
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            font.italic: true
-          }
         }
       }
 
       PanelActionButton {
         Layout.alignment: Qt.AlignTop
-        visible: deviceRow.device && deviceRow.device.self !== true
+        visible: deviceRow.remoteOnline
         iconText: "󰣀"
-        tooltipText: tailnet.canSsh(deviceRow.device) ? tailnet.sshLabel(deviceRow.device) : "Sin conexión"
-        enabled: tailnet.canSsh(deviceRow.device)
+        tooltipText: tailnet.sshLabel(deviceRow.device)
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: root.sshTo(deviceRow.device)
       }
 
       PanelActionButton {
+        id: transferButton
         Layout.alignment: Qt.AlignTop
-        visible: deviceRow.device && deviceRow.device.self !== true
-        iconText: "󰕒"
-        tooltipText: "Subir archivos (u)"
-        enabled: tailnet.canSsh(deviceRow.device)
+        visible: deviceRow.remoteOnline
+        iconText: "󰓢"
+        tooltipText: "Subir / descargar"
         foreground: root.foreground
         fontFamily: root.fontFamily
-        onClicked: root.transferTo(deviceRow.device, "upload")
+        onClicked: transferPopup.open()
       }
 
       PanelActionButton {
-        Layout.alignment: Qt.AlignTop
-        visible: deviceRow.device && deviceRow.device.self !== true
-        iconText: "󰇚"
-        tooltipText: "Descargar archivos (b)"
-        enabled: tailnet.canSsh(deviceRow.device)
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        onClicked: root.transferTo(deviceRow.device, "download")
-      }
-
-      PanelActionButton {
+        id: copyButton
         Layout.alignment: Qt.AlignTop
         iconText: "󰆏"
-        tooltipText: "Copiar IP"
-        enabled: deviceRow.device && deviceRow.device.ip !== ""
+        tooltipText: "Copiar"
+        enabled: deviceRow.device && (deviceRow.device.ip !== "" || deviceRow.device.dnsName !== "")
         foreground: root.foreground
         fontFamily: root.fontFamily
-        onClicked: tailnet.copyToClipboard(deviceRow.device.ip, deviceRow.device.name + " IP")
+        onClicked: copyPopup.open()
+      }
+    }
+
+    MiniPopup {
+      id: transferPopup
+      anchorButton: transferButton
+      // 0 = upload (left), 1 = download (right)
+      property int choice: 0
+      onOpened: choice = 0
+      onKey: function(event) {
+        if (event.key === Qt.Key_Left || event.text === "h" || event.text === "u") choice = 0
+        else if (event.key === Qt.Key_Right || event.text === "l" || event.text === "b") choice = 1
+        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          close()
+          root.transferTo(deviceRow.device, choice === 0 ? "upload" : "download")
+        } else return
+        event.accepted = true
+      }
+
+      Row {
+        spacing: Style.space(6)
+        padding: Style.space(6)
+
+        TransferTile {
+          iconText: "󰕒"
+          label: "Subir"
+          selected: transferPopup.choice === 0
+          onHovered: transferPopup.choice = 0
+          onChosen: { transferPopup.close(); root.transferTo(deviceRow.device, "upload") }
+        }
+
+        TransferTile {
+          iconText: "󰇚"
+          label: "Descargar"
+          selected: transferPopup.choice === 1
+          onHovered: transferPopup.choice = 1
+          onChosen: { transferPopup.close(); root.transferTo(deviceRow.device, "download") }
+        }
+      }
+    }
+
+    MiniPopup {
+      id: copyPopup
+      anchorButton: copyButton
+      property int choice: 0
+      readonly property var options: {
+        var result = []
+        if (deviceRow.device && deviceRow.device.ip !== "") result.push({ kind: "ip", label: "IP", value: deviceRow.device.ip })
+        if (deviceRow.device && deviceRow.device.dnsName !== "") result.push({ kind: "alias", label: "Alias", value: deviceRow.device.dnsName })
+        return result
+      }
+      onOpened: choice = 0
+      onKey: function(event) {
+        if (event.key === Qt.Key_Down || event.text === "j") choice = Math.min(options.length - 1, choice + 1)
+        else if (event.key === Qt.Key_Up || event.text === "k") choice = Math.max(0, choice - 1)
+        else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+          if (options.length > 0) root.copyValue(deviceRow.device, options[choice].kind)
+          close()
+        } else return
+        event.accepted = true
+      }
+
+      Column {
+        width: Style.space(260)
+
+        Repeater {
+          model: copyPopup.options
+          CopyChoice {
+            required property var modelData
+            required property int index
+            width: Style.space(260)
+            label: modelData.label
+            value: modelData.value
+            selected: copyPopup.choice === index
+            onHovered: copyPopup.choice = index
+            onChosen: { root.copyValue(deviceRow.device, modelData.kind); copyPopup.close() }
+          }
+        }
+      }
+    }
+  }
+
+  // Small floating card under a row button. Owns its key handling so the
+  // panel's key catcher stays out of the way while it is open.
+  component MiniPopup: Popup {
+    id: miniPopup
+    property Item anchorButton: null
+    default property alias body: miniBody.data
+    signal key(var event)
+
+    parent: anchorButton
+    x: anchorButton ? anchorButton.width - width : 0
+    y: anchorButton ? anchorButton.height + Style.space(4) : 0
+    padding: 0
+    modal: false
+    focus: true
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    onOpenedChanged: {
+      if (opened) {
+        root.popupOpen = true
+        Qt.callLater(function() { miniBody.forceActiveFocus() })
+      } else {
+        root.popupClosed()
+      }
+    }
+
+    background: BorderSurface {
+      color: Commons.Color.background
+      borderSpec: Border.flat(root.dim, 1)
+      radius: Style.cornerRadius
+    }
+
+    contentItem: Item {
+      id: miniBody
+      implicitWidth: childrenRect.width
+      implicitHeight: childrenRect.height
+      focus: true
+      Keys.priority: Keys.BeforeItem
+      Keys.onPressed: function(event) {
+        if (event.key === Qt.Key_Escape) { miniPopup.close(); event.accepted = true; return }
+        miniPopup.key(event)
+      }
+    }
+  }
+
+  component TransferTile: Rectangle {
+    id: tile
+    signal chosen()
+    signal hovered()
+    property string iconText: ""
+    property string label: ""
+    property bool selected: false
+
+    width: Style.space(96)
+    height: Style.space(72)
+    radius: Style.cornerRadius
+    color: selected || tileMouse.containsMouse ? root.hotFill : root.subtleFill
+
+    Column {
+      anchors.centerIn: parent
+      spacing: Style.space(4)
+
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: tile.iconText
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.heading
+      }
+
+      Text {
+        anchors.horizontalCenter: parent.horizontalCenter
+        textFormat: Text.PlainText
+        text: tile.label
+        color: tile.selected ? root.foreground : root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+    }
+
+    MouseArea {
+      id: tileMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: tile.hovered()
+      onClicked: tile.chosen()
+    }
+  }
+
+  component CopyChoice: CursorSurface {
+    id: copyChoice
+    signal chosen()
+    signal hovered()
+    property string label: ""
+    property string value: ""
+    property bool selected: false
+
+    foreground: root.foreground
+    hasCursor: selected
+    radius: 0
+    implicitHeight: choiceColumn.implicitHeight + Style.space(14)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: copyChoice.hovered()
+      onClicked: copyChoice.chosen()
+    }
+
+    Column {
+      id: choiceColumn
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(12)
+      anchors.rightMargin: Style.space(12)
+      spacing: Style.space(1)
+
+      Text {
+        textFormat: Text.PlainText
+        text: copyChoice.label
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      Text {
+        width: parent.width
+        textFormat: Text.PlainText
+        text: copyChoice.value
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        elide: Text.ElideMiddle
       }
     }
   }
@@ -481,20 +761,19 @@ Panel {
     readonly property bool funnel: service && service.kind === "funnel"
     readonly property bool clickable: service && (service.url !== "" || service.ssh)
 
-    implicitWidth: chipText.implicitWidth + Style.space(12)
-    implicitHeight: chipText.implicitHeight + Style.space(4)
+    implicitWidth: chipText.implicitWidth + Style.space(10)
+    implicitHeight: chipText.implicitHeight + Style.space(2)
     radius: Style.cornerRadius
-    color: chipMouse.containsMouse ? Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.16)
-                                   : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.07)
-    border.width: 1
-    border.color: funnel ? root.urgent : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.18)
+    color: chipMouse.containsMouse ? root.hotFill : root.subtleFill
+    border.width: funnel ? 1 : 0
+    border.color: root.urgent
 
     Text {
       id: chipText
       anchors.centerIn: parent
       textFormat: Text.PlainText
       text: chip.service ? chip.service.label : ""
-      color: root.foreground
+      color: chipMouse.containsMouse ? root.foreground : root.dim
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
     }
@@ -512,7 +791,7 @@ Panel {
 
     PanelToolTip {
       visible: chipMouse.containsMouse
-      text: chip.service ? (chip.service.detail + (chip.service.ssh ? " · abrir SSH" : (chip.service.url !== "" ? " · abrir" : " · copiar"))) : ""
+      text: chip.service ? chip.service.detail : ""
       fontFamily: root.fontFamily
     }
   }

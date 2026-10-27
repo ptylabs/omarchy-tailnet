@@ -15,11 +15,18 @@ Widget de barra para Omarchy, basado en el plugin integrado `omarchy.tailscale`
 
 ## Uso
 
-- Clic izquierdo: abrir panel · clic derecho: activar/desactivar Tailscale ·
-  clic central: actualizar y escanear
-- Dentro del panel: `j`/`k` mover, `↵` SSH, `u` subir, `b` bajar (descargar), `c` copiar IP, `d` copiar DNS,
-  `o` abrir el primer servicio web, `r` reescanear, `t` on/off, `esc` cerrar
-- Clic en un servicio: web → navegador, ssh → terminal, resto → copia `host:puerto`
+Cada dispositivo muestra solo su nombre y los servicios detectados. A la
+derecha de cada fila:
+
+- 󰣀 SSH
+- 󰓢 transferir: abre una caja con **Subir** (izquierda) y **Descargar** (derecha)
+- 󰆏 copiar: abre una tarjeta para elegir la IP o el alias MagicDNS
+
+Pasa el ratón por un dispositivo offline para ver cuándo se vio por última vez.
+Pulsa `?` (o el icono de ayuda) para ver todos los atajos de teclado.
+
+En la barra: clic izquierdo abre el panel, clic derecho activa/desactiva
+Tailscale y clic central actualiza y reescanea.
 
 ## Ajustes
 
