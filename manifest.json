@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "ptylabs.tailnet",
+  "name": "Tailnet",
+  "version": "0.1.0",
+  "author": "ptylabs",
+  "license": "MIT",
+  "description": "Tailnet name, connected devices, the services they expose, and one-click SSH to each machine.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Tailnet",
+    "description": "Browse tailnet devices, see their services and open SSH sessions.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalSec": 30,
+      "scanIntervalSec": 120,
+      "ports": "22,80,443,445,3000,3389,5000,5432,5900,6379,8000,8080,8123,8443,9000,9090,11434,32400",
+      "sshUser": "",
+      "sshTarget": "MagicDNS",
+      "downloadDir": "",
+      "showOffline": true
+    },
+    "schema": [
+      { "key": "refreshIntervalSec", "type": "integer", "label": "Refresh interval (seconds)", "min": 5, "max": 3600, "step": 5, "defaultValue": 30 },
+      { "key": "scanIntervalSec", "type": "integer", "label": "Service scan interval (seconds)", "min": 30, "max": 3600, "step": 30, "defaultValue": 120 },
+      { "key": "ports", "type": "string", "label": "Ports to probe", "defaultValue": "22,80,443,445,3000,3389,5000,5432,5900,6379,8000,8080,8123,8443,9000,9090,11434,32400", "description": "Comma-separated TCP ports checked on every online device." },
+      { "key": "sshUser", "type": "string", "label": "SSH user", "defaultValue": "", "description": "Optional. Empty uses ~/.ssh/config or the current user." },
+      { "key": "sshTarget", "type": "enum", "label": "SSH target", "options": ["MagicDNS", "IP"], "defaultValue": "MagicDNS" },
+      { "key": "downloadDir", "type": "path", "label": "Download folder", "defaultValue": "", "description": "Where downloads from remote devices land. Empty uses ~/Downloads." },
+      { "key": "showOffline", "type": "boolean", "label": "Show offline devices", "defaultValue": true }
+    ]
+  }
+}
