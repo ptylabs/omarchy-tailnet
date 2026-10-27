@@ -7,9 +7,11 @@ Widget de barra para Omarchy, basado en el plugin integrado `omarchy.tailscale`
 - Lista de dispositivos (online y offline, con "visto hace…")
 - Servicios detectados en cada dispositivo: sondeo TCP de una lista de puertos
   configurable a través del tailnet, más Tailscale Serve/Funnel de este equipo
-- Subir y descargar archivos por SSH/scp: eliges ficheros locales y navegas
-  las carpetas remotas con fzf (`Ctrl-S` sube/descarga en la carpeta actual,
-  `Tab` marca varios). Las descargas van a `~/Downloads` por defecto
+- Subir y descargar archivos y carpetas por SSH/scp:
+  - Subir: eliges "Archivos" (varios) o "Carpeta", y después la carpeta remota
+    de destino navegando con fzf (`Ctrl-S` sube a la carpeta actual)
+  - Descargar: navegas el remoto con fzf (`Tab` marca varios, `Ctrl-S` toda la
+    carpeta actual) y eliges dónde guardar; si cancelas, va a `~/Downloads`
 - SSH a cada dispositivo en un terminal nuevo (usa `tailscale ssh` cuando el
   peer ejecuta Tailscale SSH, `ssh` en caso contrario)
 

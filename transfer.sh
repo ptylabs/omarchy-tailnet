@@ -38,7 +38,13 @@ remote() { ssh -S "$sock" "$dest" "$@"; }
 
 files=()
 if [[ $mode == upload ]]; then
-  picked=$(omarchy-file-select --title "Subir a $name" --multiple) || true
+  # The portal chooser picks either files or a folder, never both at once.
+  kind=$(printf '%s\n' "Archivos" "Carpeta" | fzf --reverse --height=~6 --header "¿Qué quieres subir a $name?") || exit 0
+  if [[ $kind == Carpeta ]]; then
+    picked=$(omarchy-file-select --title "Subir carpeta a $name" --directory) || true
+  else
+    picked=$(omarchy-file-select --title "Subir a $name" --multiple) || true
+  fi
   [[ -n $picked ]] || exit 0
   readarray -t files <<<"$picked"
 fi
@@ -101,6 +107,9 @@ if [[ $mode == upload ]]; then
   omarchy-notification-send -g "󰕒" "Subido a $name" "$what → $chosen" 2>/dev/null
 else
   readarray -t paths <<<"$chosen"
+  # Cancelling the folder chooser falls back to the configured folder.
+  target=$(omarchy-file-select --title "Guardar en… (cancelar = ${localdir/#$HOME/\~})" --directory) || true
+  [[ -n $target ]] && localdir="$target"
   sources=()
   for path in "${paths[@]}"; do sources+=("$dest:$path"); done
   what=$( ((${#paths[@]} == 1)) && basename -- "${paths[0]}" || echo "${#paths[@]} elementos")
