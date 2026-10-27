@@ -96,7 +96,7 @@ function deviceFromStatus(id, peer, isSelf) {
 
 function parseStatus(raw) {
   var text = String(raw || "").trim()
-  if (text === "") return { ok: true, unavailable: true, message: "Desconectado" }
+  if (text === "") return { ok: true, unavailable: true, message: "Disconnected" }
 
   try {
     var data = JSON.parse(text)
@@ -135,7 +135,7 @@ function parseStatus(raw) {
       devices: devices
     }
   } catch (e) {
-    return { ok: false, unavailable: true, message: "Error de estado", error: "No se pudo leer tailscale status" }
+    return { ok: false, unavailable: true, message: "Status error", error: "Failed to parse tailscale status" }
   }
 }
 
@@ -207,7 +207,7 @@ function parseServe(raw) {
       var base = "https://" + host + (port === "443" ? "" : ":" + port)
       for (var path in handlers) {
         var handler = handlers[path] || {}
-        var target = handler.Proxy || handler.Path || (handler.Text ? "texto" : "")
+        var target = handler.Proxy || handler.Path || (handler.Text ? "text" : "")
         result.push({
           kind: funnel[hostPort] === true ? "funnel" : "serve",
           label: (funnel[hostPort] === true ? "funnel " : "serve ") + (port === "443" ? "" : ":" + port) + path,
@@ -251,10 +251,10 @@ function relativeTime(iso, nowMs) {
   // Tailscale reports the zero time for peers it has never seen.
   if (!isFinite(ms) || ms <= 0) return ""
   var seconds = Math.max(0, Math.round(((nowMs || Date.now()) - ms) / 1000))
-  if (seconds < 60) return "hace un momento"
-  if (seconds < 3600) return "hace " + Math.round(seconds / 60) + " min"
-  if (seconds < 86400) return "hace " + Math.round(seconds / 3600) + " h"
-  return "hace " + Math.round(seconds / 86400) + " d"
+  if (seconds < 60) return "just now"
+  if (seconds < 3600) return Math.round(seconds / 60) + " min ago"
+  if (seconds < 86400) return Math.round(seconds / 3600) + " h ago"
+  return Math.round(seconds / 86400) + " d ago"
 }
 
 if (typeof module !== "undefined") {

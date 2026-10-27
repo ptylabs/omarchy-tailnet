@@ -29,18 +29,18 @@ Panel {
   readonly property var rows: tailnet.active && tailnet.selfDevice ? [tailnet.selfDevice].concat(tailnet.visibleDevices) : []
   readonly property var shortcuts: [
     { key: "↵", text: "SSH" },
-    { key: "f", text: "Subir / descargar" },
-    { key: "u", text: "Subir archivos" },
-    { key: "b", text: "Descargar archivos" },
-    { key: "y", text: "Copiar…" },
-    { key: "c", text: "Copiar IP" },
-    { key: "d", text: "Copiar alias" },
-    { key: "o", text: "Abrir servicio web" },
-    { key: "r", text: "Actualizar y escanear" },
+    { key: "f", text: "Upload / download" },
+    { key: "u", text: "Upload files" },
+    { key: "b", text: "Download files" },
+    { key: "y", text: "Copy…" },
+    { key: "c", text: "Copy IP" },
+    { key: "d", text: "Copy alias" },
+    { key: "o", text: "Open web service" },
+    { key: "r", text: "Refresh and scan" },
     { key: "t", text: "Tailscale on/off" },
-    { key: "?", text: "Ayuda" },
-    { key: "clic der.", text: "Icono: on/off" },
-    { key: "clic central", text: "Icono: escanear" }
+    { key: "?", text: "Help" },
+    { key: "right click", text: "Icon: on/off" },
+    { key: "middle click", text: "Icon: scan" }
   ]
 
   function selectedRow() {
@@ -230,7 +230,7 @@ Panel {
               id: hero
               width: parent.width
               title: tailnet.tailnetName !== "" ? tailnet.tailnetName : "Tailnet"
-              meta: tailnet.active ? "" : (tailnet.installed ? tailnet.statusText : "Tailscale no está instalado")
+              meta: tailnet.active ? "" : (tailnet.installed ? tailnet.statusText : "Tailscale is not installed")
               foreground: root.foreground
               fontFamily: root.fontFamily
               iconOpacity: tailnet.active ? 1.0 : 0.5
@@ -254,7 +254,7 @@ Panel {
                     // The glyph is drawn below so only it spins; rotating the
                     // button would spin its hover box too.
                     iconText: ""
-                    tooltipText: "Actualizar y escanear"
+                    tooltipText: "Refresh and scan"
                     foreground: hero.foreground
                     fontFamily: hero.fontFamily
                     enabled: !tailnet.scanning
@@ -283,7 +283,7 @@ Panel {
                   PanelActionButton {
                     anchors.verticalCenter: parent.verticalCenter
                     iconText: header.helpOpen ? "󰅖" : "󰋖"
-                    tooltipText: header.helpOpen ? "Cerrar ayuda" : "Atajos (?)"
+                    tooltipText: header.helpOpen ? "Close help" : "Shortcuts (?)"
                     foreground: hero.foreground
                     fontFamily: hero.fontFamily
                     onClicked: header.toggleHelp()
@@ -300,7 +300,7 @@ Panel {
 
                     PanelToolTip {
                       visible: powerSwitch.containsMouse
-                      text: tailnet.active ? "Desactivar Tailscale" : (tailnet.needsLogin ? "Autorizar este equipo" : "Activar Tailscale")
+                      text: tailnet.active ? "Turn Tailscale off" : (tailnet.needsLogin ? "Authorize this device" : "Turn Tailscale on")
                       fontFamily: hero.fontFamily
                     }
                   }
@@ -391,7 +391,7 @@ Panel {
           Text {
             visible: !root.helpOpen && tailnet.active && tailnet.devices.length === 0
             width: parent.width
-            text: "Sin otros dispositivos"
+            text: "No other devices"
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -413,7 +413,7 @@ Panel {
     readonly property string hoverText: {
       if (!device || online) return ""
       var seen = tailnet.relativeTime(device.lastSeen)
-      return seen !== "" ? "Desconectado · visto " + seen : "Desconectado"
+      return seen !== "" ? "Offline · seen " + seen : "Offline"
     }
 
     function openCopy() { copyPopup.open() }
@@ -532,7 +532,7 @@ Panel {
         Layout.alignment: Qt.AlignTop
         visible: deviceRow.remoteOnline
         iconText: "󰓢"
-        tooltipText: "Subir / descargar"
+        tooltipText: "Upload / download"
         foreground: root.foreground
         fontFamily: root.fontFamily
         onClicked: transferPopup.open()
@@ -542,7 +542,7 @@ Panel {
         id: copyButton
         Layout.alignment: Qt.AlignTop
         iconText: "󰆏"
-        tooltipText: "Copiar"
+        tooltipText: "Copy"
         enabled: deviceRow.device && (deviceRow.device.ip !== "" || deviceRow.device.dnsName !== "")
         foreground: root.foreground
         fontFamily: root.fontFamily
@@ -572,7 +572,7 @@ Panel {
 
         TransferTile {
           iconText: "󰕒"
-          label: "Subir"
+          label: "Upload"
           selected: transferPopup.choice === 0
           onHovered: transferPopup.choice = 0
           onChosen: { transferPopup.close(); root.transferTo(deviceRow.device, "upload") }
@@ -580,7 +580,7 @@ Panel {
 
         TransferTile {
           iconText: "󰇚"
-          label: "Descargar"
+          label: "Download"
           selected: transferPopup.choice === 1
           onHovered: transferPopup.choice = 1
           onChosen: { transferPopup.close(); root.transferTo(deviceRow.device, "download") }

@@ -14,7 +14,7 @@ localdir="${3:-}"
 localdir="${localdir/#\~/$HOME}"
 
 if [[ $mode != upload && $mode != download ]] || [[ -z $dest ]]; then
-  echo "Uso: transfer.sh upload|download <destino> [carpeta-local]" >&2
+  echo "Usage: transfer.sh upload|download <destination> [local-dir]" >&2
   exit 1
 fi
 
@@ -27,7 +27,7 @@ trap cleanup EXIT
 
 fail() {
   omarchy-notification-send -g "󰣀" -u critical "$1" "$2" 2>/dev/null
-  printf '\n%s: %s\nPulsa Enter para cerrar… ' "$1" "$2"
+  printf '\n%s: %s\nPress Enter to close… ' "$1" "$2"
   read -r _
   exit 1
 }
@@ -39,19 +39,19 @@ remote() { ssh -S "$sock" "$dest" "$@"; }
 files=()
 if [[ $mode == upload ]]; then
   # The portal chooser picks either files or a folder, never both at once.
-  kind=$(printf '%s\n' "Archivos" "Carpeta" | fzf --reverse --height=~6 --header "¿Qué quieres subir a $name?") || exit 0
-  if [[ $kind == Carpeta ]]; then
-    picked=$(omarchy-file-select --title "Subir carpeta a $name" --directory) || true
+  kind=$(printf '%s\n' "Files" "Folder" | fzf --reverse --height=~6 --header "What do you want to upload to $name?") || exit 0
+  if [[ $kind == Folder ]]; then
+    picked=$(omarchy-file-select --title "Upload folder to $name" --directory) || true
   else
-    picked=$(omarchy-file-select --title "Subir a $name" --multiple) || true
+    picked=$(omarchy-file-select --title "Upload to $name" --multiple) || true
   fi
   [[ -n $picked ]] || exit 0
   readarray -t files <<<"$picked"
 fi
 
-echo "Conectando con $dest…"
-ssh -fNM -S "$sock" "$dest" || fail "No se pudo conectar con $name" "ssh $dest falló"
-cwd=$(remote pwd) || fail "No se pudo leer $name" "El remoto no tiene un shell POSIX"
+echo "Connecting to $dest…"
+ssh -fNM -S "$sock" "$dest" || fail "Could not connect to $name" "ssh $dest failed"
+cwd=$(remote pwd) || fail "Could not read $name" "The remote has no POSIX shell"
 
 # Walks remote folders with fzf. Prints the chosen absolute paths, or the
 # chosen destination folder when uploading.
@@ -59,9 +59,9 @@ browse() {
   local out key sel header
   while true; do
     if [[ $mode == upload ]]; then
-      header="Subir ${#files[@]} elemento(s) → Enter: entrar · Ctrl-S: subir aquí · Esc: cancelar"
+      header="Upload ${#files[@]} item(s) → Enter: open · Ctrl-S: upload here · Esc: cancel"
     else
-      header="Enter: entrar/descargar · Tab: marcar varios · Ctrl-S: descargar esta carpeta · Esc: salir"
+      header="Enter: open/download · Tab: select multiple · Ctrl-S: download this folder · Esc: quit"
     fi
 
     out=$( { echo "../"; remote "cd $(q "$cwd") && ls -1Ap" | grep -v '^\./$\|^\.\./$'; } \
@@ -100,25 +100,25 @@ chosen=$(browse) || exit 0
 [[ -n $chosen ]] || exit 0
 
 if [[ $mode == upload ]]; then
-  what=$( ((${#files[@]} == 1)) && basename -- "${files[0]}" || echo "${#files[@]} elementos")
-  echo "Subiendo $what a $name:$chosen…"
+  what=$( ((${#files[@]} == 1)) && basename -- "${files[0]}" || echo "${#files[@]} items")
+  echo "Uploading $what to $name:$chosen…"
   scp -r -o ControlPath="$sock" -- "${files[@]}" "$dest:$chosen/" \
-    || fail "No se pudo subir a $name" "$what → $chosen"
-  omarchy-notification-send -g "󰕒" "Subido a $name" "$what → $chosen" 2>/dev/null
+    || fail "Could not upload to $name" "$what → $chosen"
+  omarchy-notification-send -g "󰕒" "Uploaded to $name" "$what → $chosen" 2>/dev/null
 else
   readarray -t paths <<<"$chosen"
   # Cancelling the folder chooser falls back to the configured folder.
-  target=$(omarchy-file-select --title "Guardar en… (cancelar = ${localdir/#$HOME/\~})" --directory) || true
+  target=$(omarchy-file-select --title "Save to… (cancel = ${localdir/#$HOME/\~})" --directory) || true
   [[ -n $target ]] && localdir="$target"
   sources=()
   for path in "${paths[@]}"; do sources+=("$dest:$path"); done
-  what=$( ((${#paths[@]} == 1)) && basename -- "${paths[0]}" || echo "${#paths[@]} elementos")
+  what=$( ((${#paths[@]} == 1)) && basename -- "${paths[0]}" || echo "${#paths[@]} items")
   mkdir -p -- "$localdir"
-  echo "Descargando $what de $name a $localdir…"
+  echo "Downloading $what from $name to $localdir…"
   scp -r -o ControlPath="$sock" -- "${sources[@]}" "$localdir/" \
-    || fail "No se pudo descargar de $name" "$what"
-  omarchy-notification-send -g "󰇚" "Descargado de $name" "$what → ${localdir/#$HOME/\~}" 2>/dev/null
+    || fail "Could not download from $name" "$what"
+  omarchy-notification-send -g "󰇚" "Downloaded from $name" "$what → ${localdir/#$HOME/\~}" 2>/dev/null
 fi
 
-echo "Hecho."
+echo "Done."
 sleep 1

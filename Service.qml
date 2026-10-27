@@ -18,7 +18,7 @@ Item {
   property int _desired: -1
   readonly property bool active: _desired === -1 ? running : (_desired === 1)
   property string backendState: "Unknown"
-  property string statusText: "Comprobando…"
+  property string statusText: "Checking…"
   property string authUrl: ""
   property string tailnetName: ""
   property string magicDnsSuffix: ""
@@ -115,10 +115,10 @@ Item {
     // Keep the window open when the session fails, otherwise an auth error
     // just flashes a terminal on screen and disappears.
     var script = "\"$@\"; code=$?; "
-      + "if [ $code -ne 0 ]; then printf '\\n[%s terminó con código %s] Pulsa Enter para cerrar… ' \"$*\" \"$code\"; read -r _; fi"
+      + "if [ $code -ne 0 ]; then printf '\\n[%s exited with code %s] Press Enter to close… ' \"$*\" \"$code\"; read -r _; fi"
     Quickshell.execDetached(["setsid", "uwsm-app", "--", "xdg-terminal-exec", "--app-id=org.omarchy.ssh",
       "--title=SSH " + device.name, "-e", "bash", "-c", script, "ssh"].concat(command))
-    flashStatus("Abriendo " + sshLabel(device))
+    flashStatus("Opening " + sshLabel(device))
   }
 
   // mode is "upload" or "download"; transfer.sh does the picking and copying
@@ -128,7 +128,7 @@ Item {
     var destination = Model.sshDestination(device, sshUser, sshTarget)
     var script = decodeURIComponent(String(Qt.resolvedUrl("transfer.sh")).replace(/^[a-z]+:\/\//, ""))
     Quickshell.execDetached(["setsid", "uwsm-app", "--", "xdg-terminal-exec", "--app-id=org.omarchy.tailnet-transfer",
-      "--title=" + (mode === "upload" ? "Subir a " : "Descargar de ") + device.name,
+      "--title=" + (mode === "upload" ? "Upload to " : "Download from ") + device.name,
       "-e", "bash", script, mode, destination, downloadDir])
   }
 
@@ -153,7 +153,7 @@ Item {
     var text = String(value || "")
     if (text === "") return
     Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(text) + " | wl-copy"])
-    flashStatus("Copiado " + (label || text))
+    flashStatus("Copied " + (label || text))
   }
 
   function flashStatus(text) {
@@ -235,7 +235,7 @@ Item {
     magicDnsSuffix = parsed.magicDnsSuffix
     selfDevice = parsed.self
     devices = parsed.running ? parsed.devices : []
-    statusText = needsLogin ? "Requiere login" : (running ? "Conectado" : (backendState === "Stopped" ? "Desconectado" : backendState))
+    statusText = needsLogin ? "Needs login" : (running ? "Connected" : (backendState === "Stopped" ? "Disconnected" : backendState))
     lastError = ""
     if (running && (!wasRunning || scannedAtMs === 0)) scan()
   }
@@ -318,7 +318,7 @@ Item {
     onExited: function(exitCode) {
       root.installed = exitCode === 0
       if (root.installed) root.refreshStatus()
-      else root.resetUnavailable("Tailscale no está instalado")
+      else root.resetUnavailable("Tailscale is not installed")
     }
   }
 
@@ -332,7 +332,7 @@ Item {
       var stderr = String(statusStderr.text || root._statusError || "")
       if (exitCode === 0) root.parseStatus(stdout)
       else {
-        root.resetUnavailable("Desconectado")
+        root.resetUnavailable("Disconnected")
         root.lastError = root.elide(stderr)
       }
     }
@@ -371,7 +371,7 @@ Item {
     onExited: function(exitCode) {
       if (exitCode !== 0) {
         root._desired = -1
-        root.lastError = root.elide(String(actionStderr.text || root._actionError || actionStdout.text || "Falló el comando de Tailscale"))
+        root.lastError = root.elide(String(actionStderr.text || root._actionError || actionStdout.text || "Tailscale command failed"))
       } else {
         root.lastError = ""
       }
@@ -391,7 +391,7 @@ Item {
         Quickshell.execDetached(["omarchy-launch-browser", match[0]])
       } else if (exitCode !== 0) {
         root._desired = -1
-        root.lastError = root.elide(root._loginOutput || "tailscale up falló")
+        root.lastError = root.elide(root._loginOutput || "tailscale up failed")
       }
       delayedRefresh.restart()
     }

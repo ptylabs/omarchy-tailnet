@@ -10,7 +10,7 @@ DEST="$HOME/.config/omarchy/plugins/$ID"
 omarchy plugin validate "$SRC"
 mkdir -p "$DEST"
 rsync -a --delete --exclude install.sh --exclude .git "$SRC/" "$DEST/"
-echo "Instalado en $DEST"
+echo "Installed to $DEST"
 
 # Hot reload keeps serving cached QML for this plugin, so restart the shell.
 omarchy restart shell >/dev/null 2>&1 || true
