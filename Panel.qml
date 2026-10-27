@@ -248,22 +248,35 @@ Panel {
                   spacing: Style.space(6)
 
                   PanelActionButton {
+                    id: rescanButton
                     anchors.verticalCenter: parent.verticalCenter
                     visible: tailnet.active
-                    iconText: "󰑐"
+                    // The glyph is drawn below so only it spins; rotating the
+                    // button would spin its hover box too.
+                    iconText: ""
                     tooltipText: "Actualizar y escanear"
                     foreground: hero.foreground
                     fontFamily: hero.fontFamily
                     enabled: !tailnet.scanning
                     onClicked: header.rescan()
 
-                    RotationAnimation on rotation {
-                      running: tailnet.scanning
-                      from: 0
-                      to: 360
-                      duration: 900
-                      loops: Animation.Infinite
-                      onStopped: parent.rotation = 0
+                    Text {
+                      anchors.centerIn: parent
+                      text: "󰑐"
+                      color: rescanButton.foreground
+                      opacity: rescanButton.enabled ? 1.0 : 0.6
+                      font.family: rescanButton.fontFamily
+                      font.pixelSize: rescanButton.fontSize
+
+                      NumberAnimation on rotation {
+                        running: tailnet.scanning
+                        from: 0
+                        to: 360
+                        duration: 900
+                        loops: Animation.Infinite
+                      }
+
+                      onRotationChanged: if (!tailnet.scanning && rotation !== 0) rotation = 0
                     }
                   }
 
